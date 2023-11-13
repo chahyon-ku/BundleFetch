@@ -1,0 +1,23 @@
+hydra:
+  output_subdir: null
+  run:
+    dir: ./
+
+xmem:
+  checkpoint: /media/rpm/Data/imitation_learning/BundleFetch/checkpoints/XMem.pth
+  single_object: False
+  mem_every: 5
+  deep_update_every: -1
+  enable_long_term: True
+  enable_long_term_count_usage: True
+  key_dim: 64
+  hidden_dim: 64
+  value_dim: 512
+  top_k: 5
+  max_mid_term_frames: 10
+  min_mid_term_frames: 5
+  max_long_term_elements: 10000
+  num_prototypes: 128
+
+
+data_dir: data/test

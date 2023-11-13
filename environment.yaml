@@ -1,0 +1,18 @@
+name: bundle_fetch
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pyrealsense2
+  - ca-certificates
+  - openssl
+  - py-opencv
+  - hydra-core
+  - imageio
+  - imageio-ffmpeg
+  - pyglet
+  - pytorch==1.11.0
+  - torchvision==0.12.0
+  - torchaudio==0.11.0
+  - cudatoolkit=11.3
+prefix: /home/rpm/mambaforge/envs/bundle_fetch

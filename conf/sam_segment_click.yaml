@@ -1,0 +1,10 @@
+hydra:
+  output_subdir: null
+  run:
+    dir: ./
+
+data_dir: data/test
+device: cuda
+sam:
+  model_type: vit_h
+  checkpoint: /media/rpm/Data/imitation_learning/BundleFetch/checkpoints/sam_vit_h_4b8939.pth
