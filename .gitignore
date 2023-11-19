@@ -4,3 +4,4 @@ data
 static
 DAVIS
 *__pycache__*
+.vscode

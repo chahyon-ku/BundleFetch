@@ -38,5 +38,5 @@ def track_thread_target(track_stop, track_queue, mask_model, corr_model, pose_mo
 
         prev_frame = frame
         i_frame += 1
-        if i_frame == 3:
-            track_stop.set()
+        # if i_frame == 3:
+        #     track_stop.set()

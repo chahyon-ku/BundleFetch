@@ -2,9 +2,10 @@ import random
 from matplotlib import pyplot as plt
 import torch
 from torch.nn.functional import grid_sample
-from torchvision.transforms.functional import rgb_to_grayscale, InterpolationMode
+from torchvision.transforms.functional import rgb_to_grayscale, InterpolationMode, resize
 from loftr.loftr import LoFTR, default_cfg
 from bundle_fetch.utils import nvtx_range
+import open3d as o3d
 
 
 # https://github.com/chengzegang/TorchSIFT/blob/main/src/torchsift/ransac/ransac.py
@@ -72,6 +73,7 @@ def ransac(corr):
 
 def get_corr_model():
     def corr_model(frame, prev_frame, keyframes):
+        return None
         data = {}
         data['image0'] = rgb_to_grayscale(frame['rgb'])[None]
         corr_model.loftr.forward_backbone(data)
@@ -88,21 +90,54 @@ def get_corr_model():
             frames = [prev_frame]
 
         N = len(frames)
+        mask0 = resize(
+            frame['mask'].expand(N, -1, -1),
+            (frame['mask'].shape[0] // 8, frame['mask'].shape[1] // 8),
+            interpolation=InterpolationMode.NEAREST
+        ).bool() # (N, H, W)
+        mask1 = torch.cat([
+            resize(f['mask'][None], (f['mask'].shape[0] // 8, f['mask'].shape[1] // 8), interpolation=InterpolationMode.NEAREST)
+            for f in frames
+        ]).bool() # (N, H, W)
+        mask0 |= mask1
+        mask1 |= mask0
+
         data.update({
             'bs': N,
-            'feat_c0': data['feat_c0'].expand(N, -1, -1, -1),
-            'feat_f0': data['feat_f0'].expand(N, -1, -1, -1),
+            'feat_c0': data['feat_c0'].expand(N, -1, -1, -1), # (N, C, H, W)
+            'feat_f0': data['feat_f0'].expand(N, -1, -1, -1), # (N, C, H, W)
+            'mask0': mask0,
             'hw1_i': data['hw0_i'], 
             'hw1_c': data['hw0_c'],
             'hw1_f': data['hw0_f'],
-            'feat_c1': torch.cat([f['feat_c0'] for f in frames]),
-            'feat_f1': torch.cat([f['feat_f0'] for f in frames]),
+            'feat_c1': torch.cat([f['feat_c0'] for f in frames]), # (N, C, H, W)
+            'feat_f1': torch.cat([f['feat_f0'] for f in frames]), # (N, C, H, W)
+            'mask1': mask1,
         })
         corr_model.loftr.forward_matching(data)
             
-        conf = torch.reshape(data['mconf'], (N, -1))[:, :100] # (N, M)
-        uv_a = torch.reshape(data['mkpts0_f'], (N, -1, 2))[:, :100] # (N, M, 2)
-        uv_b = torch.reshape(data['mkpts1_f'], (N, -1, 2))[:, :100] # (N, M, 2)
+        conf = torch.reshape(data['mconf'], (N, -1)) # (N, M)
+        uv_a = torch.reshape(data['mkpts0_f'], (N, -1, 2)) # (N, M, 2)
+        uv_b = torch.reshape(data['mkpts1_f'], (N, -1, 2)) # (N, M, 2)
+        M = conf.shape[1]
+        print('[corr] N', N, 'M', M)
+
+        # show all correspondences as a line connecting the two frames
+        # for i in range(N):
+        #     plt.imshow(torch.cat([mask0[i], mask1[i]], dim=1).cpu().numpy())
+        #     plt.title(f'mask {i}')
+        #     plt.show()
+        #     plt.figure()
+        #     plt.imshow(torch.cat([frame['rgb'], frames[i]['rgb']], dim=2).permute(1, 2, 0).cpu().numpy())
+        #     for j in range(M):
+        #         if conf[i, j] > 0:
+        #             plt.plot(
+        #                 [uv_a[i, j, 0].item(), uv_b[i, j, 0].item() + frame['wh'][0].item()],
+        #                 [uv_a[i, j, 1].item(), uv_b[i, j, 1].item()],
+        #                 'b'
+        #             )
+        #     plt.title(f'frame {i}')
+        #     plt.show()
 
         grid_a = uv_a / frame['wh'] # (N, M, 2)
         grid_a = grid_a * 2 - 1 # (N, M, 2)
@@ -110,17 +145,38 @@ def get_corr_model():
         grid_b = uv_b / frame['wh'] # (N, M, 2)
         grid_b = grid_b * 2 - 1 # (N, M, 2)
         grid_b = grid_b[:, :, None] # (N, M, 1, 2)
-        masked_ayz_a = frame['xyz'] * frame['mask'][None] # (3, 480, 640)
-        masked_ayz_a = masked_ayz_a.expand(N, -1, -1, -1) # (N, 3, 480, 640)
-        masked_ayz_b = torch.stack([f['xyz'] for f in frames]) * torch.stack([f['mask'][None] for f in frames]) # (N, 3, 480, 640)
+        masked_xyz_a = frame['xyz'] * frame['mask'][None] # (3, 480, 640)
+        masked_xyz_a = masked_xyz_a.expand(N, -1, -1, -1) # (N, 3, 480, 640)
+        masked_xyz_b = torch.stack([f['xyz'] for f in frames]) * torch.stack([f['mask'][None] for f in frames]) # (N, 3, 480, 640)
         
-        xyz1_a = grid_sample(masked_ayz_a, grid_a, align_corners=True) # (N, 3, M, 1)
+        xyz1_a = grid_sample(masked_xyz_a, grid_a, align_corners=True) # (N, 3, M, 1)
         xyz1_a = xyz1_a.permute(0, 2, 1, 3) # (N, M, 3, 1)
         xyz1_a = torch.cat([xyz1_a, torch.ones_like(xyz1_a[:, :, :1])], dim=2) # (N, M, 4, 1)
         
-        xyz1_b = grid_sample(masked_ayz_b, grid_b, align_corners=True) # (N, 3, M, 1)
+        xyz1_b = grid_sample(masked_xyz_b, grid_b, align_corners=True) # (N, 3, M, 1)
         xyz1_b = xyz1_b.permute(0, 2, 1, 3) # (N, M, 3, 1)
         xyz1_b = torch.cat([xyz1_b, torch.ones_like(xyz1_b[:, :, :1])], dim=2) # (N, M, 4, 1)
+
+        conf *= (xyz1_a[..., 2, 0] > 0.1) # (N, M)
+        conf *= (xyz1_b[..., 2, 0] > 0.1) # (N, M)
+        conf *= (xyz1_a[..., :3, 0] - xyz1_b[..., :3, 0]).norm(dim=-1) < 0.1 # (N, M)
+
+        xyz1_a[..., :3, 0] = xyz1_a[..., :3, 0] * (conf[..., None] > 0) # (N, M, 3)
+        xyz1_b[..., :3, 0] = xyz1_b[..., :3, 0] * (conf[..., None] > 0) # (N, M, 3)
+
+        # show point cloud of all correspondences
+        xyz_a = xyz1_a[..., :3, 0]
+        o3d.visualization.draw_geometries([
+            o3d.geometry.PointCloud(
+                points=o3d.utility.Vector3dVector(xyz_a[i].squeeze().cpu().numpy())
+            ) for i in range(N)
+        ])
+        xyz_b = xyz1_b[..., :3, 0]
+        o3d.visualization.draw_geometries([
+            o3d.geometry.PointCloud(
+                points=o3d.utility.Vector3dVector(xyz_b[i].squeeze().cpu().numpy())
+            ) for i in range(N)
+        ])
 
         corr = {
             'o_T_c_a': prev_frame['o_T_c'].expand(N, -1, -1), # (N, 4, 4)

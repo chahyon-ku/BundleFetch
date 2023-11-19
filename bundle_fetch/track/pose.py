@@ -8,7 +8,7 @@ from bundle_fetch.track.solver_pytorch import solve
 
 def get_pose_model():
     def pose_model(corr, frame):
-        if corr is None:
+        if True:#corr is None:
             max_masked_xyz = (frame['xyz'] * frame['mask'])
             min_masked_xyz = (frame['xyz'] * frame['mask'] + 999 * (1 - frame['mask']))
             avg = torch.sum(max_masked_xyz, dim=(1, 2)) / torch.sum(frame['mask'])

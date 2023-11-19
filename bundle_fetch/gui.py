@@ -25,7 +25,7 @@ def gui_thread_target(gui_stop, gui_queue: Queue):
     dpg.add_text("fps: 0",tag='fps',color=[0,255,0], parent='row4')
 
     dpg.set_primary_window("main", True)
-    dpg.set_viewport_title('BundleSDF')
+    dpg.set_viewport_title('BundleFetch')
     dpg.show_viewport()
 
     IMG_HEIGHT = 480
