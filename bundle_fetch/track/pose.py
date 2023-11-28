@@ -25,5 +25,4 @@ def get_pose_model():
 
             return o_T_c_a, o_T_c_b
                 
-    
     return pose_model

@@ -32,10 +32,17 @@ def gui_thread_target(gui_stop, gui_queue: Queue):
     IMG_WIDTH = 640
     i_frame = 0
 
+    init_rgba = 255 * np.ones((IMG_HEIGHT, IMG_WIDTH * 2, 4), dtype=np.uint8)
+    rgba = 255 * np.ones((IMG_HEIGHT * 2, IMG_WIDTH * 2, 4), dtype=np.uint8)
+
     while dpg.is_dearpygui_running() and not gui_stop.is_set():
         dpg.render_dearpygui_frame()
 
-        frame = gui_queue.get()
+        try:
+            frame = gui_queue.get(timeout=0.1)
+        except:
+            continue
+        
         if 'mesh' in frame:
             pass
         else:
@@ -45,43 +52,61 @@ def gui_thread_target(gui_stop, gui_queue: Queue):
             # dpg.set_value('frame_num', f'frame_num: {frame["frame_num"]}')
             # dpg.set_value('time_elapsed', f'time_elapsed: {frame["time_elapsed"]}')
             # dpg.set_value('fps', f'fps: {frame["fps"]}')
-
-            rgba = frame['rgb'].cpu().numpy()
-            rgba = np.concatenate([rgba, np.ones((1, rgba.shape[1], rgba.shape[2]))], axis=0)
-            masked_rgba = rgba * frame['mask'].cpu().numpy()[None]
-            rgba = rgba.transpose(1, 2, 0)
-            masked_rgba = masked_rgba.transpose(1, 2, 0)
-
-            o_T_c = frame['o_T_c'].cpu().numpy()
-            c_T_o = inv_transform(o_T_c)
-            axes = np.array([[0, 0.1, 0, 0], [0, 0, 0.1, 0], [0, 0, 0, 0.1], [1, 1, 1, 1]])
-            axes = c_T_o @ axes
-            axes = frame['cam_K'].cpu().numpy() @ axes[:3]
-            axes = axes[:2] / axes[2:3]
-            axes = axes.round().astype(int)
-            axes[0] = np.clip(axes[0], 0, 639)
-            axes[1] = np.clip(axes[1], 0, 479)
-            rgba = (rgba * 255).astype(np.uint8).copy()
             # print('c_T_o', c_T_o)
             # print(tuple(axes[:, 0]))
-            rgba = cv2.arrowedLine(rgba, tuple(axes[:, 0]), tuple(axes[:, 1]), (0, 0, 255, 255), 2)
-            rgba = cv2.arrowedLine(rgba, tuple(axes[:, 0]), tuple(axes[:, 2]), (0, 255, 0, 255), 2)
-            rgba = cv2.arrowedLine(rgba, tuple(axes[:, 0]), tuple(axes[:, 3]), (255, 0, 0, 255), 2)
-            rgba = (rgba / 255).astype(np.float32)
 
             if dpg.get_value("rgb") is None:
+                init_rgba[:IMG_HEIGHT, :IMG_WIDTH, :3] = frame['rgb'].cpu().numpy().transpose(1, 2, 0) * 255
+                init_rgba[:IMG_HEIGHT, IMG_WIDTH:, :3] = rgba[:IMG_HEIGHT, :IMG_WIDTH, :3] * frame['mask'][None].cpu().numpy().transpose(1, 2, 0)
+
+                o_T_c = frame['o_T_c'].cpu().numpy()
+                c_T_o = inv_transform(o_T_c)
+                axes = np.array([[0, 0.1, 0, 0], [0, 0, 0.1, 0], [0, 0, 0, 0.1], [1, 1, 1, 1]])
+                axes = c_T_o @ axes
+                axes = frame['cam_K'].cpu().numpy() @ axes[:3]
+                axes = axes[:2] / axes[2:3]
+                axes = axes.round().astype(int)
+                axes[0] = np.clip(axes[0], 0, 639)
+                axes[1] = np.clip(axes[1], 0, 479)
+                init_rgba = cv2.arrowedLine(init_rgba, tuple(axes[:, 0]), tuple(axes[:, 1]), (0, 0, 255, 255), 2)
+                init_rgba = cv2.arrowedLine(init_rgba, tuple(axes[:, 0]), tuple(axes[:, 2]), (0, 255, 0, 255), 2)
+                init_rgba = cv2.arrowedLine(init_rgba, tuple(axes[:, 0]), tuple(axes[:, 3]), (255, 0, 0, 255), 2)
+
+                rgba[:IMG_HEIGHT] = init_rgba[:IMG_HEIGHT]
+
                 with dpg.texture_registry(show=False):
-                    dpg.add_dynamic_texture(IMG_WIDTH, IMG_HEIGHT, rgba.reshape(-1), tag="rgb_init")
-                    dpg.add_dynamic_texture(IMG_WIDTH, IMG_HEIGHT, masked_rgba.reshape(-1), tag="masked_rgb_init")
-                    dpg.add_dynamic_texture(IMG_WIDTH, IMG_HEIGHT, rgba.reshape(-1), tag="rgb")
-                    dpg.add_dynamic_texture(IMG_WIDTH, IMG_HEIGHT, masked_rgba.reshape(-1), tag="masked_rgb")
-                dpg.add_image("rgb_init", parent='row0')
-                dpg.add_image("masked_rgb_init", parent='row0')
-                dpg.add_image("rgb", parent='row1')
-                dpg.add_image("masked_rgb", parent='row1')
+                    dpg.add_dynamic_texture(IMG_WIDTH * 2, IMG_HEIGHT * 2, (rgba / 255).astype(np.float32).reshape(-1), tag="rgb")
+                dpg.add_image("rgb", parent='row0')
             else:
-                dpg.set_value("rgb", rgba.reshape(-1))
-                dpg.set_value("masked_rgb", masked_rgba.reshape(-1))
+                rgba[:IMG_HEIGHT] = init_rgba[:IMG_HEIGHT]
+                rgba[IMG_HEIGHT:, :IMG_WIDTH, :3] = frame['rgb'].cpu().numpy().transpose(1, 2, 0) * 255
+                rgba[IMG_HEIGHT:, IMG_WIDTH:, :3] = rgba[IMG_HEIGHT:, :IMG_WIDTH, :3] * frame['mask'][None].cpu().numpy().transpose(1, 2, 0)
+
+                o_T_c = frame['o_T_c'].cpu().numpy()
+                c_T_o = inv_transform(o_T_c)
+                axes = np.array([[0, 0.1, 0, 0], [0, 0, 0.1, 0], [0, 0, 0, 0.1], [1, 1, 1, 1]])
+                axes = c_T_o @ axes
+                axes = frame['cam_K'].cpu().numpy() @ axes[:3]
+                axes = axes[:2] / axes[2:3]
+                axes = axes.round().astype(int)
+                axes[0] = np.clip(axes[0], 0, 639)
+                axes[1] = np.clip(axes[1], 0, 479)
+                axes[1] += 480
+                rgba = cv2.arrowedLine(rgba, tuple(axes[:, 0]), tuple(axes[:, 1]), (0, 0, 255, 255), 2)
+                rgba = cv2.arrowedLine(rgba, tuple(axes[:, 0]), tuple(axes[:, 2]), (0, 255, 0, 255), 2)
+                rgba = cv2.arrowedLine(rgba, tuple(axes[:, 0]), tuple(axes[:, 3]), (255, 0, 0, 255), 2)
+
+                if 'uv_a' in frame:
+                    uv_a = frame['uv_a'].cpu().numpy().round().astype(int)
+                    uv_b = frame['uv_b'].cpu().numpy().round().astype(int)
+                    conf = frame['conf'].cpu().numpy()
+
+                    # draw correspondences
+                    for i in range(uv_a.shape[0]):
+                        if conf[i] > 0:
+                            rgba = cv2.line(rgba, tuple(uv_a[i]), (uv_b[i, 0], uv_b[i, 1] + 480), (0, 255, 0, 255), 1)
+
+                dpg.set_value("rgb", (rgba / 255).astype(np.float32).reshape(-1))
             
             i_frame += 1
 

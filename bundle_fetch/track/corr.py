@@ -1,5 +1,6 @@
 import random
 from matplotlib import pyplot as plt
+import matplotlib.animation as animation
 import torch
 from torch.nn.functional import grid_sample
 from torchvision.transforms.functional import rgb_to_grayscale, InterpolationMode, resize
@@ -73,7 +74,6 @@ def ransac(corr):
 
 def get_corr_model():
     def corr_model(frame, prev_frame, keyframes):
-        return None
         data = {}
         data['image0'] = rgb_to_grayscale(frame['rgb'])[None]
         corr_model.loftr.forward_backbone(data)
@@ -124,19 +124,25 @@ def get_corr_model():
 
         # show all correspondences as a line connecting the two frames
         # for i in range(N):
-        #     plt.imshow(torch.cat([mask0[i], mask1[i]], dim=1).cpu().numpy())
-        #     plt.title(f'mask {i}')
-        #     plt.show()
-        #     plt.figure()
-        #     plt.imshow(torch.cat([frame['rgb'], frames[i]['rgb']], dim=2).permute(1, 2, 0).cpu().numpy())
+        #     # plt.imshow(torch.cat([mask0[i], mask1[i]], dim=1).cpu().numpy())
+        #     # plt.title(f'mask {i}')
+        #     # plt.show()
+        #     fig, ax = plt.subplots()
+        #     ax.imshow(torch.cat([frame['rgb'], frames[i]['rgb']], dim=2).permute(1, 2, 0).cpu().numpy())
+        #     xs = []
+        #     ys = []
         #     for j in range(M):
         #         if conf[i, j] > 0:
-        #             plt.plot(
-        #                 [uv_a[i, j, 0].item(), uv_b[i, j, 0].item() + frame['wh'][0].item()],
-        #                 [uv_a[i, j, 1].item(), uv_b[i, j, 1].item()],
-        #                 'b'
-        #             )
-        #     plt.title(f'frame {i}')
+        #             xs.append([uv_a[i, j, 0].item(), uv_b[i, j, 0].item() + frame['wh'][0].item()])
+        #             ys.append([uv_a[i, j, 1].item(), uv_b[i, j, 1].item()])
+
+        #     line = ax.plot(xs[0], ys[0], 'b')
+        #     ax.set_title(f'frame {i}')
+        #     def update(frame):
+        #         line.set_xdata(xs[frame])
+        #         line.set_ydata(ys[frame])
+        #         return line
+        #     ani = animation.FuncAnimation(fig=fig, func=update, frames=len(xs), interval=30)
         #     plt.show()
 
         grid_a = uv_a / frame['wh'] # (N, M, 2)
@@ -165,22 +171,24 @@ def get_corr_model():
         xyz1_b[..., :3, 0] = xyz1_b[..., :3, 0] * (conf[..., None] > 0) # (N, M, 3)
 
         # show point cloud of all correspondences
-        xyz_a = xyz1_a[..., :3, 0]
-        o3d.visualization.draw_geometries([
-            o3d.geometry.PointCloud(
-                points=o3d.utility.Vector3dVector(xyz_a[i].squeeze().cpu().numpy())
-            ) for i in range(N)
-        ])
-        xyz_b = xyz1_b[..., :3, 0]
-        o3d.visualization.draw_geometries([
-            o3d.geometry.PointCloud(
-                points=o3d.utility.Vector3dVector(xyz_b[i].squeeze().cpu().numpy())
-            ) for i in range(N)
-        ])
+        # xyz_a = xyz1_a[..., :3, 0]
+        # o3d.visualization.draw_geometries([
+        #     o3d.geometry.PointCloud(
+        #         points=o3d.utility.Vector3dVector(xyz_a[i].squeeze().cpu().numpy())
+        #     ) for i in range(N)
+        # ])
+        # xyz_b = xyz1_b[..., :3, 0]
+        # o3d.visualization.draw_geometries([
+        #     o3d.geometry.PointCloud(
+        #         points=o3d.utility.Vector3dVector(xyz_b[i].squeeze().cpu().numpy())
+        #     ) for i in range(N)
+        # ])
 
         corr = {
             'o_T_c_a': prev_frame['o_T_c'].expand(N, -1, -1), # (N, 4, 4)
             'o_T_c_b': torch.stack([f['o_T_c'] for f in frames]), # (N, 4, 4)
+            'uv_a': uv_a, # (N, M, 2)
+            'uv_b': uv_b, # (N, M, 2)
             'xyz1_a': xyz1_a, # (N, M, 4, 1)
             'xyz1_b': xyz1_b, # (N, M, 4, 1)
             'conf': conf, # (N, M)
