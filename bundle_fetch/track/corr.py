@@ -81,6 +81,8 @@ class Corr:
         self.loftr = self.loftr.eval().cuda()
 
     def __call__(self, new_frame, prev_frames):
+
+
         data = {}
         data['image0'] = rgb_to_grayscale(frame['rgb'])[None]
         self.loftr.forward_backbone(data)
@@ -213,13 +215,4 @@ class Corr:
 
         # corr = ransac(corr)
         return corr
-
-
-def get_features(frame, loftr):
-    data = {}
-    data['image0'] = rgb_to_grayscale(frame['rgb'])[None]
-    loftr.forward_backbone(data)
-    frame['feat_c0'] = data['feat_c0']
-    frame['feat_f0'] = data['feat_f0']
-
-def get_corrs()
+    
