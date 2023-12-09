@@ -3,10 +3,12 @@ from matplotlib import pyplot as plt
 import matplotlib.animation as animation
 import torch
 from torch.nn.functional import grid_sample
+import torch.nn.functional as F
 from torchvision.transforms.functional import rgb_to_grayscale, InterpolationMode, resize
 from loftr.loftr import LoFTR, default_cfg
 from bundle_fetch.utils import nvtx_range
 import open3d as o3d
+from lietorch import SE3
 
 
 # https://github.com/chengzegang/TorchSIFT/blob/main/src/torchsift/ransac/ransac.py
@@ -72,11 +74,16 @@ def ransac(corr):
     return best_model, inliers, best_errors
 
 
-def get_corr_model():
-    def corr_model(frame, prev_frame, keyframes):
+class Corr:
+    def __init__(self):
+        self.loftr = LoFTR(config=default_cfg)
+        self.loftr.load_state_dict(torch.load(f'checkpoints/outdoor_ds.ckpt')['state_dict'])
+        self.loftr = self.loftr.eval().cuda()
+
+    def __call__(self, new_frame, prev_frames):
         data = {}
         data['image0'] = rgb_to_grayscale(frame['rgb'])[None]
-        corr_model.loftr.forward_backbone(data)
+        self.loftr.forward_backbone(data)
         frame['feat_c0'] = data['feat_c0']
         frame['feat_f0'] = data['feat_f0']
 
@@ -90,17 +97,22 @@ def get_corr_model():
             frames = [prev_frame]
 
         N = len(frames)
-        mask0 = resize(
-            frame['mask'].expand(N, -1, -1),
-            (frame['mask'].shape[0] // 8, frame['mask'].shape[1] // 8),
-            interpolation=InterpolationMode.NEAREST
-        ).bool() # (N, H, W)
+        mask0 = (F.max_pool2d(frame['mask'][None].float(), 8) > 0).expand(N, -1, -1) # (N, H, W)
         mask1 = torch.cat([
-            resize(f['mask'][None], (f['mask'].shape[0] // 8, f['mask'].shape[1] // 8), interpolation=InterpolationMode.NEAREST)
+            F.max_pool2d(f['mask'][None].float(), 8) > 0
             for f in frames
-        ]).bool() # (N, H, W)
-        mask0 |= mask1
-        mask1 |= mask0
+        ])
+        # mask0 = resize(
+        #     frame['mask'].expand(N, -1, -1),
+        #     (frame['mask'].shape[0] // 8, frame['mask'].shape[1] // 8),
+        #     interpolation=InterpolationMode.NEAREST
+        # ).bool() # (N, H, W)
+        # mask1 = torch.cat([
+        #     resize(f['mask'][None], (f['mask'].shape[0] // 8, f['mask'].shape[1] // 8), interpolation=InterpolationMode.NEAREST)
+        #     for f in frames
+        # ]).bool() # (N, H, W)
+        # mask0 |= mask1
+        # mask1 |= mask0
 
         data.update({
             'bs': N,
@@ -136,13 +148,13 @@ def get_corr_model():
         #             xs.append([uv_a[i, j, 0].item(), uv_b[i, j, 0].item() + frame['wh'][0].item()])
         #             ys.append([uv_a[i, j, 1].item(), uv_b[i, j, 1].item()])
 
-        #     line = ax.plot(xs[0], ys[0], 'b')
-        #     ax.set_title(f'frame {i}')
+        #     line, = ax.plot(xs[0], ys[0], 'b')
+        #     ax.set_title(f'frame {i} {len(xs)} matches')
         #     def update(frame):
         #         line.set_xdata(xs[frame])
         #         line.set_ydata(ys[frame])
         #         return line
-        #     ani = animation.FuncAnimation(fig=fig, func=update, frames=len(xs), interval=30)
+        #     ani = animation.FuncAnimation(fig=fig, func=update, frames=len(xs), interval=10)
         #     plt.show()
 
         grid_a = uv_a / frame['wh'] # (N, M, 2)
@@ -158,17 +170,21 @@ def get_corr_model():
         xyz1_a = grid_sample(masked_xyz_a, grid_a, align_corners=True) # (N, 3, M, 1)
         xyz1_a = xyz1_a.permute(0, 2, 1, 3) # (N, M, 3, 1)
         xyz1_a = torch.cat([xyz1_a, torch.ones_like(xyz1_a[:, :, :1])], dim=2) # (N, M, 4, 1)
+        xyz1_a = xyz1_a * (conf[..., None, None] > 0) # (N, M, 4, 1)
         
         xyz1_b = grid_sample(masked_xyz_b, grid_b, align_corners=True) # (N, 3, M, 1)
         xyz1_b = xyz1_b.permute(0, 2, 1, 3) # (N, M, 3, 1)
         xyz1_b = torch.cat([xyz1_b, torch.ones_like(xyz1_b[:, :, :1])], dim=2) # (N, M, 4, 1)
+        xyz1_b = xyz1_b * (conf[..., None, None] > 0) # (N, M, 4, 1)
 
         conf *= (xyz1_a[..., 2, 0] > 0.1) # (N, M)
         conf *= (xyz1_b[..., 2, 0] > 0.1) # (N, M)
         conf *= (xyz1_a[..., :3, 0] - xyz1_b[..., :3, 0]).norm(dim=-1) < 0.1 # (N, M)
 
-        xyz1_a[..., :3, 0] = xyz1_a[..., :3, 0] * (conf[..., None] > 0) # (N, M, 3)
-        xyz1_b[..., :3, 0] = xyz1_b[..., :3, 0] * (conf[..., None] > 0) # (N, M, 3)
+        print('n_matches', (conf > 0).sum(dim=1))
+
+        xyz1_a[..., 0] *= (conf[..., None] > 0) # (N, M, 4)
+        xyz1_b[..., 0] *= (conf[..., None] > 0) # (N, M, 4)
 
         # show point cloud of all correspondences
         # xyz_a = xyz1_a[..., :3, 0]
@@ -185,8 +201,8 @@ def get_corr_model():
         # ])
 
         corr = {
-            'o_T_c_a': prev_frame['o_T_c'].expand(N, -1, -1), # (N, 4, 4)
-            'o_T_c_b': torch.stack([f['o_T_c'] for f in frames]), # (N, 4, 4)
+            'o_T_c_a': prev_frame['o_T_c'], # (N, 4, 4)
+            'o_T_c_b': SE3(torch.concat([f['o_T_c'].data for f in frames], 0)), # (N, 4, 4)
             'uv_a': uv_a, # (N, M, 2)
             'uv_b': uv_b, # (N, M, 2)
             'xyz1_a': xyz1_a, # (N, M, 4, 1)
@@ -197,9 +213,13 @@ def get_corr_model():
 
         # corr = ransac(corr)
         return corr
-    corr_model.loftr = LoFTR(config=default_cfg)
-    corr_model.loftr.load_state_dict(torch.load(f'checkpoints/outdoor_ds.ckpt')['state_dict'])
-    corr_model.loftr = corr_model.loftr.eval().cuda()
-    return corr_model
 
 
+def get_features(frame, loftr):
+    data = {}
+    data['image0'] = rgb_to_grayscale(frame['rgb'])[None]
+    loftr.forward_backbone(data)
+    frame['feat_c0'] = data['feat_c0']
+    frame['feat_f0'] = data['feat_f0']
+
+def get_corrs()

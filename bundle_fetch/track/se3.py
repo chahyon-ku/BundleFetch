@@ -36,11 +36,12 @@ def residual(T, xyz1):
     # xyz1: (2N, M, 4, 1)
     # r: (2N, M, 3, 1)
     N = T.shape[0] // 2
-    xyz1 *= (xyz1[:, 2:3, :] > 0) # mask out invalid points
+    xyz1 = xyz1 * (xyz1[:, 2:3, :] > 0) # mask out invalid points
     xyz = torch.einsum('nij,nmjk->nmik', T, xyz1)[:, :, :3] # (2N, M, 3, 1)
-    r = torch.zeros_like(xyz) # (2N, M, 3, 1)
-    r[:N] = xyz[:N] - xyz[N:]
-    r[N:] = xyz[N:] - xyz[:N]
+    r = torch.cat([xyz[:N] - xyz[N:], xyz[N:] - xyz[:N]], dim=0) # (2N, M, 3, 1)
+    # r = torch.zeros_like(xyz) # (2N, M, 3, 1)
+    # r[:N] = xyz[:N] - xyz[N:]
+    # r[N:] = xyz[N:] - xyz[:N]
     return r
 
 

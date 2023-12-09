@@ -28,20 +28,20 @@ def track_thread_target(track_stop, track_queue, mask_model, corr_model, pose_mo
                                     frame['uv_a'] = corrs['uv_a'][idx]
                                     frame['uv_b'] = corrs['uv_b'][idx]
                                     frame['conf'] = corrs['conf'][idx]
-                    with nvtx_range('pose_model'):
-                        o_T_c_a, o_T_c_b = pose_model(corrs, frame)
-                        frame['o_T_c'] = o_T_c_a[0]
-                        
-                        if o_T_c_b is not None:
-                            for i_pair in range(o_T_c_b.shape[0]):
-                                if i_pair == 0:
-                                    prev_frame['o_T_c'] = o_T_c_b[i_pair]
-                                else:
-                                    keyframes[corrs['i_keyframes'][i_pair - 1]]['o_T_c'] = o_T_c_b[i_pair]
-                        
-                    gui_queue.put(frame)
-                    if prev_frame is not None:
-                        check_and_add_keyframe(prev_frame, keyframes)
+            with nvtx_range('pose_model'):
+                o_T_v = pose_model(corrs, frame)
+                frame['o_T_c'] = o_T_c_a
+                
+                if o_T_c_b is not None:
+                    for i_pair in range(o_T_c_b.shape[0]):
+                        if i_pair == 0:
+                            prev_frame['o_T_c'] = o_T_c_b[i_pair]
+                        else:
+                            keyframes[corrs['i_keyframes'][i_pair - 1]]['o_T_c'] = o_T_c_b[None, i_pair]
+                
+            gui_queue.put(frame)
+            if prev_frame is not None:
+                check_and_add_keyframe(prev_frame, keyframes)
 
         prev_frame = frame
         i_frame += 1

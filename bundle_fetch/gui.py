@@ -59,8 +59,8 @@ def gui_thread_target(gui_stop, gui_queue: Queue):
                 init_rgba[:IMG_HEIGHT, :IMG_WIDTH, :3] = frame['rgb'].cpu().numpy().transpose(1, 2, 0) * 255
                 init_rgba[:IMG_HEIGHT, IMG_WIDTH:, :3] = rgba[:IMG_HEIGHT, :IMG_WIDTH, :3] * frame['mask'][None].cpu().numpy().transpose(1, 2, 0)
 
-                o_T_c = frame['o_T_c'].cpu().numpy()
-                c_T_o = inv_transform(o_T_c)
+                o_T_c = frame['o_T_c'].matrix().cpu().numpy()
+                c_T_o = frame['o_T_c'].inv().matrix().cpu().numpy()
                 axes = np.array([[0, 0.1, 0, 0], [0, 0, 0.1, 0], [0, 0, 0, 0.1], [1, 1, 1, 1]])
                 axes = c_T_o @ axes
                 axes = frame['cam_K'].cpu().numpy() @ axes[:3]

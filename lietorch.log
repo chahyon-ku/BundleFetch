@@ -1,0 +1,17 @@
+Collecting git+https://github.com/princeton-vl/lietorch.git
+  Cloning https://github.com/princeton-vl/lietorch.git to /tmp/pip-req-build-ztlde37g
+  Running command git clone --filter=blob:none --quiet https://github.com/princeton-vl/lietorch.git /tmp/pip-req-build-ztlde37g
+  Resolved https://github.com/princeton-vl/lietorch.git to commit 0fa9ce8ffca86d985eca9e189a99690d6f3d4df6
+  Running command git submodule update --init --recursive -q
+  Preparing metadata (setup.py): started
+  Preparing metadata (setup.py): finished with status 'done'
+Building wheels for collected packages: lietorch
+  Building wheel for lietorch (setup.py): started
+  Building wheel for lietorch (setup.py): still running...
+  Building wheel for lietorch (setup.py): still running...
+  Building wheel for lietorch (setup.py): finished with status 'done'
+  Created wheel for lietorch: filename=lietorch-0.2-cp38-cp38-linux_x86_64.whl size=2657430 sha256=a96b3749f911ab37b9dfbc2d7e7edb797ce3a75fbb61cc74b308433f6bc324a9
+  Stored in directory: /tmp/pip-ephem-wheel-cache-gadag34o/wheels/57/1c/20/ec748733fee51508509734e3cbf8f77da7a2d1a5eb5c1eef18
+Successfully built lietorch
+Installing collected packages: lietorch
+Successfully installed lietorch-0.2
