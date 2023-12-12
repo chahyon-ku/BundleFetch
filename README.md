@@ -7,6 +7,7 @@ mamba install matplotlib einops yacs hydra-core imageio plotly dash scikit-learn
 conda install -c fvcore -c iopath -c conda-forge fvcore iopath
 mamba install pytorch3d -c pytorch3d
 pip install --no-deps kornia open3d dearpygui
+pip install --no-deps git+https://github.com/facebookresearch/segment-anything.git
 
 pip install --upgrade --no-deps bosdyn-client bosdyn-mission bosdyn-choreography-client bosdyn-api bosdyn-core
 mamba install protobuf grpcio deprecated pyjwt

@@ -6,4 +6,4 @@ hydra:
 width: 640
 height: 480
 fps: 30
-output_dir: data/test
+output_dir: data/test2

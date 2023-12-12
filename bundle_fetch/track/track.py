@@ -42,23 +42,22 @@ class Track(object):
                     event.synchronize()
 
                     self.new_vertex = make_vertex(frame, self.new_vertex, len(self.vertices), self.xmem, self.loftr)
-                    if len(self.vertices) == 0:
-                        self.vertices[0] = self.new_vertex
-                    else:
-                        subvertices = get_subvertices(self.new_vertex, self.vertices, self.n_subvertices)
-                        subedges = get_subedges(subvertices, self.edges, self.loftr)
-                        # optimize_graph(subvertices, subedges)
+                    # if len(self.vertices) == 0:
+                    #     self.vertices[0] = self.new_vertex
+                    # else:
+                    #     subvertices = get_subvertices(self.new_vertex, self.vertices, self.n_subvertices)
+                    #     subedges = get_subedges(subvertices, self.edges, self.loftr)
+                    #     # optimize_graph(subvertices, subedges)
                         
-                        if check_add_vertex(self.new_vertex, self.vertices):
-                            self.vertices[self.new_vertex['id']] = self.new_vertex
-                            for k_subedge, v_subedge in subedges.items():
-                                if k_subedge not in self.edges:
-                                    self.edges[k_subedge] = v_subedge
+                    #     if check_add_vertex(self.new_vertex, self.vertices):
+                    #         self.vertices[self.new_vertex['id']] = self.new_vertex
+                    #         for k_subedge, v_subedge in subedges.items():
+                    #             if k_subedge not in self.edges:
+                    #                 self.edges[k_subedge] = v_subedge
                         # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-
+                    self.vertices[self.new_vertex['id']] = self.new_vertex
                     self.gui_queue.put(self.new_vertex)
-                    print(self.new_vertex['o_T_c'].matrix())
-                    input()
+                    # print(self.new_vertex['o_T_c'])
 
 
 def load_loftr():
@@ -101,12 +100,12 @@ def make_vertex(frame, prev_vertex, id, xmem, loftr):
             # 'hw_c': hw_c,
             # 'hw_f': hw_f,
         }
-        if id == 0:
-            max_masked_xyz = (frame['xyz'].cuda() * mask.cuda())
-            o_T_c = -torch.sum(max_masked_xyz, dim=(1, 2)) / torch.sum(mask.cuda()) # (3)
-            o_T_c = torch.concat([o_T_c, torch.zeros_like(o_T_c)], dim=-1)
-            vertex['o_T_c'] = lietorch.SE3.exp(o_T_c) # (6)
-            return vertex
+        # if id == 0:
+        max_masked_xyz = (frame['xyz'].cuda() * mask.cuda())
+        o_T_c = torch.sum(max_masked_xyz, dim=(1, 2)) / torch.sum(mask.cuda()) # (3)
+        o_T_c = torch.concat([o_T_c, torch.zeros_like(o_T_c)], dim=-1)
+        vertex['o_T_c'] = lietorch.SE3.exp(o_T_c) # (6)
+        return vertex
 
         prev_vertex['id'] = -1
         subvertices = {prev_vertex['id']: prev_vertex, vertex['id']: vertex}

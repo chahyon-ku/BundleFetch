@@ -40,7 +40,7 @@ class BfDataset(Dataset):
                 image = Image.open(image_path).convert('RGB')
                 image = self.rgb_transform(image) # 1, 480, 640
             elif key == 'masks':
-                if index > 0:
+                if not os.path.exists(image_path):
                     continue
                 image = Image.open(image_path).convert('P')
                 image = np.array(image, np.uint8)

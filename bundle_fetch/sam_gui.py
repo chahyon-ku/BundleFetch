@@ -18,9 +18,10 @@ from PIL import Image
 
 # https://github.com/fsemerar/segment-anything-gui/blob/main/segment_anything_gui/gui.py
 class Segmenter():
-    def __init__(self, img):
+    def __init__(self, img, mask_path):
         self.img = img
         self.min_mask_region_area = 500
+        self.mask_path = mask_path
 
         self.sam = sam_model_registry["vit_h"](checkpoint="checkpoints/sam_vit_h_4b8939.pth")
         if torch.cuda.is_available():
@@ -68,6 +69,7 @@ class Segmenter():
         os.makedirs(os.path.dirname(self.mask_path), exist_ok=True)
         self.mask = Image.fromarray(self.last_mask.astype(np.uint8) * 255, mode='L').convert('1')
         self.mask.save(self.mask_path)
+        print(f'Saved mask to {self.mask_path}')
     
     def pick_color(self):
         while True:
@@ -82,7 +84,7 @@ class Segmenter():
 
         elif event.key == 'enter':
             self.new_tow()
-            # self.save_annotation()
+            self.save_annotation()
             plt.close(self.fig)
 
         elif event.key == 'escape':  # save for notebooks

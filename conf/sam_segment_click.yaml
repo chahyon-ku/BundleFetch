@@ -3,7 +3,7 @@ hydra:
   run:
     dir: ./
 
-data_dir: data/test
+data_dir: data/test_multiobj
 device: cuda
 sam:
   model_type: vit_h

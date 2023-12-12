@@ -9,7 +9,7 @@ class Frame(object):
     def __init__(self, frame_stop, track_queue) -> None:
         self.frame_stop = frame_stop
         self.track_queue = track_queue
-        self.dataset = BfDataset('/media/rpm/Data/imitation_learning/BundleFetch/data/test')
+        self.dataset = BfDataset('/media/rpm/Data/imitation_learning/BundleFetch/data/test_multiobj')
         W = 640
         H = 480
         self.uv1 = torch.stack(torch.meshgrid(torch.arange(0, W), torch.arange(0, H))).float()
@@ -67,6 +67,7 @@ def process_frame(frame, uv1):
     y_dir = (
         (abs(dzdy_p) < dz_thresh) * (abs(dzdy_n) < dz_thresh) * (dzdy_p + dzdy_n) / 2 +
         (abs(dzdy_p) < dz_thresh) * (abs(dzdy_n) >= dz_thresh) * dzdy_p +
+        
         (abs(dzdy_p) >= dz_thresh) * (abs(dzdy_n) < dz_thresh) * dzdy_n
     ) # (3, H-2, W-2)
     frame['nxyz'][:, 1:-1, 1:-1] = torch.cross(x_dir, y_dir, dim=0) # (3, H-2, W-2)

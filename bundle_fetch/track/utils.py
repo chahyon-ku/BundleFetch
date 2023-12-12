@@ -7,7 +7,7 @@ import open3d as o3d
 from bundle_fetch.utils import nvtx_range
 
 
-def get_mask(frame, xmem):
+def get_mask(frame, xmem, n_objs):
     """
     Get mask from vertex
     """
@@ -15,11 +15,16 @@ def get_mask(frame, xmem):
         rgb = frame['rgb'].cuda()
         mask = frame.get('mask')
         if mask is None:
+            if n_objs == 0:
+                return None
             labels = None
         else:
-            mask = mask.cuda()
-            labels = torch.unique(mask)
-            labels = labels[labels!=0]
+            # mask = mask.cuda()
+            # labels = torch.unique(mask)
+            # labels = labels[labels!=0]
+            # labels = torch.concatenate((prev_labels, labels))
+            mask = mask + n_objs
+            labels = torch.arange(1, n_objs+2, device=labels.device, dtype=labels.dtype, out=labels)
         prob = xmem.step(rgb, mask, labels)
         out_mask = torch.max(prob, dim=0).indices
         return out_mask
@@ -80,9 +85,9 @@ def filter_edges(vertices, edges):
         j_pj = j_sj[samples] # (max_iter, num_sample, 3)
         i_qi = i_pi - torch.mean(i_pi, dim=1, keepdim=True) # (max_iter, num_sample, 3)
         j_qj = j_pj - torch.mean(j_pj, dim=1, keepdim=True) # (max_iter, num_sample, 3)
-        print('i_qi', i_qi)
-        print('j_qj', j_qj)
-        input()
+        # print('i_qi', i_qi)
+        # print('j_qj', j_qj)
+        # input()
 
         # H = torch.einsum('msi, msj -> mij', i_qi, j_qj) # (max_iter, 3, 3)
         H = i_qi[..., None] * j_qj[..., None, :] # (max_iter, num_sample, 3, 3)
