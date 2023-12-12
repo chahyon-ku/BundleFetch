@@ -39,11 +39,11 @@ def gui_thread_target(gui_stop, gui_queue: Queue):
         dpg.render_dearpygui_frame()
 
         try:
-            frame = gui_queue.get(timeout=0.1)
+            vertex = gui_queue.get(timeout=0.1)
         except:
             continue
         
-        if 'mesh' in frame:
+        if 'mesh' in vertex:
             pass
         else:
             # dpg.set_value('frame_id', f'frame: {frame["i_frame"]}')
@@ -56,14 +56,14 @@ def gui_thread_target(gui_stop, gui_queue: Queue):
             # print(tuple(axes[:, 0]))
 
             if dpg.get_value("rgb") is None:
-                init_rgba[:IMG_HEIGHT, :IMG_WIDTH, :3] = frame['rgb'].cpu().numpy().transpose(1, 2, 0) * 255
-                init_rgba[:IMG_HEIGHT, IMG_WIDTH:, :3] = rgba[:IMG_HEIGHT, :IMG_WIDTH, :3] * frame['mask'][None].cpu().numpy().transpose(1, 2, 0)
+                init_rgba[:IMG_HEIGHT, :IMG_WIDTH, :3] = vertex['frame']['rgb'].cpu().numpy().transpose(1, 2, 0) * 255
+                init_rgba[:IMG_HEIGHT, IMG_WIDTH:, :3] = rgba[:IMG_HEIGHT, :IMG_WIDTH, :3] * vertex['mask'][None].cpu().numpy().transpose(1, 2, 0)
 
-                o_T_c = frame['o_T_c'].matrix().cpu().numpy()
-                c_T_o = frame['o_T_c'].inv().matrix().cpu().numpy()
+                o_T_c = vertex['o_T_c'].matrix().cpu().numpy()
+                c_T_o = vertex['o_T_c'].inv().matrix().cpu().numpy()
                 axes = np.array([[0, 0.1, 0, 0], [0, 0, 0.1, 0], [0, 0, 0, 0.1], [1, 1, 1, 1]])
                 axes = c_T_o @ axes
-                axes = frame['cam_K'].cpu().numpy() @ axes[:3]
+                axes = vertex['frame']['cam_K'].cpu().numpy() @ axes[:3]
                 axes = axes[:2] / axes[2:3]
                 axes = axes.round().astype(int)
                 axes[0] = np.clip(axes[0], 0, 639)
@@ -79,27 +79,27 @@ def gui_thread_target(gui_stop, gui_queue: Queue):
                 dpg.add_image("rgb", parent='row0')
             else:
                 rgba[:IMG_HEIGHT] = init_rgba[:IMG_HEIGHT]
-                rgba[IMG_HEIGHT:, :IMG_WIDTH, :3] = frame['rgb'].cpu().numpy().transpose(1, 2, 0) * 255
-                rgba[IMG_HEIGHT:, IMG_WIDTH:, :3] = rgba[IMG_HEIGHT:, :IMG_WIDTH, :3] * frame['mask'][None].cpu().numpy().transpose(1, 2, 0)
+                rgba[IMG_HEIGHT:, :IMG_WIDTH, :3] = vertex['frame']['rgb'].cpu().numpy().transpose(1, 2, 0) * 255
+                rgba[IMG_HEIGHT:, IMG_WIDTH:, :3] = rgba[IMG_HEIGHT:, :IMG_WIDTH, :3] * vertex['mask'][None].cpu().numpy().transpose(1, 2, 0)
 
-                o_T_c = frame['o_T_c'].cpu().numpy()
-                c_T_o = inv_transform(o_T_c)
+                o_T_c = vertex['o_T_c'].matrix().cpu().numpy()
+                c_T_o = vertex['o_T_c'].inv().matrix().cpu().numpy()
                 axes = np.array([[0, 0.1, 0, 0], [0, 0, 0.1, 0], [0, 0, 0, 0.1], [1, 1, 1, 1]])
                 axes = c_T_o @ axes
-                axes = frame['cam_K'].cpu().numpy() @ axes[:3]
+                axes = vertex['frame']['cam_K'].cpu().numpy() @ axes[:3]
                 axes = axes[:2] / axes[2:3]
                 axes = axes.round().astype(int)
                 axes[0] = np.clip(axes[0], 0, 639)
                 axes[1] = np.clip(axes[1], 0, 479)
-                axes[1] += 480
+                # axes[1] += 480
                 rgba = cv2.arrowedLine(rgba, tuple(axes[:, 0]), tuple(axes[:, 1]), (0, 0, 255, 255), 2)
                 rgba = cv2.arrowedLine(rgba, tuple(axes[:, 0]), tuple(axes[:, 2]), (0, 255, 0, 255), 2)
                 rgba = cv2.arrowedLine(rgba, tuple(axes[:, 0]), tuple(axes[:, 3]), (255, 0, 0, 255), 2)
 
-                if 'uv_a' in frame:
-                    uv_a = frame['uv_a'].cpu().numpy().round().astype(int)
-                    uv_b = frame['uv_b'].cpu().numpy().round().astype(int)
-                    conf = frame['conf'].cpu().numpy()
+                if 'uv_a' in vertex:
+                    uv_a = vertex['uv_a'].cpu().numpy().round().astype(int)
+                    uv_b = vertex['uv_b'].cpu().numpy().round().astype(int)
+                    conf = vertex['conf'].cpu().numpy()
 
                     # draw correspondences
                     for i in range(uv_a.shape[0]):
@@ -108,6 +108,8 @@ def gui_thread_target(gui_stop, gui_queue: Queue):
 
                 dpg.set_value("rgb", (rgba / 255).astype(np.float32).reshape(-1))
             
+            # update frame number
+            dpg.set_value('frame_id', f'frame: {i_frame}')
             i_frame += 1
 
     dpg.destroy_context()

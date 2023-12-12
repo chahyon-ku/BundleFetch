@@ -6,3 +6,4 @@ DAVIS
 *__pycache__*
 .vscode
 bundle_fetch/lib
+*.qd*

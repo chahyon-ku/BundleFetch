@@ -46,20 +46,20 @@ def BA(target, weight, eta, poses, disps, intrinsics, ii, jj, fixedp=1, rig=1):
     w = .001 * (valid * weight).view(B, N, -1, 1)
 
     ### 2: construct linear system ###
-    Ji = Ji.reshape(B, N, -1, D)
-    Jj = Jj.reshape(B, N, -1, D)
+    Ji = Ji.reshape(B, N, -1, D) # (B, N, S, D)
+    Jj = Jj.reshape(B, N, -1, D) # (B, N, S, D)
     wJiT = (w * Ji).transpose(2,3)
     wJjT = (w * Jj).transpose(2,3)
 
     Jz = Jz.reshape(B, N, ht*wd, -1)
 
-    Hii = torch.matmul(wJiT, Ji)
-    Hij = torch.matmul(wJiT, Jj)
-    Hji = torch.matmul(wJjT, Ji)
-    Hjj = torch.matmul(wJjT, Jj)
+    Hii = torch.matmul(wJiT, Ji) # (B, N, D, D)
+    Hij = torch.matmul(wJiT, Jj) # (B, N, D, D)
+    Hji = torch.matmul(wJjT, Ji) # (B, N, D, D)
+    Hjj = torch.matmul(wJjT, Jj) # (B, N, D, D)
 
-    vi = torch.matmul(wJiT, r).squeeze(-1)
-    vj = torch.matmul(wJjT, r).squeeze(-1)
+    vi = torch.matmul(wJiT, r).squeeze(-1) # (B, N, D)
+    vj = torch.matmul(wJjT, r).squeeze(-1) # (B, N, D)
 
     Ei = (wJiT.view(B,N,D,ht*wd,-1) * Jz[:,:,None]).sum(dim=-1)
     Ej = (wJjT.view(B,N,D,ht*wd,-1) * Jz[:,:,None]).sum(dim=-1)

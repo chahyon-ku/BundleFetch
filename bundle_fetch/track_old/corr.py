@@ -80,7 +80,7 @@ class Corr:
         self.loftr.load_state_dict(torch.load(f'checkpoints/outdoor_ds.ckpt')['state_dict'])
         self.loftr = self.loftr.eval().cuda()
 
-    def __call__(self, new_frame, prev_frames):
+    def __call__(self, frame, prev_frames):
 
 
         data = {}

@@ -7,7 +7,7 @@ from glob import glob
 import imageio
 from PIL import Image
 from torchvision import transforms
-from XMem.dataset.range_transform import im_normalization
+from xmem.dataset.range_transform import im_normalization
 
 
 class BfDataset(Dataset):
