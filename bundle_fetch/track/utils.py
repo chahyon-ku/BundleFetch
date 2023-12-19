@@ -18,16 +18,22 @@ def get_mask(frame, xmem, n_objs):
             if n_objs == 0:
                 return None
             labels = None
+            in_masks = None
         else:
-            # mask = mask.cuda()
+            mask = mask.cuda()
             # labels = torch.unique(mask)
             # labels = labels[labels!=0]
             # labels = torch.concatenate((prev_labels, labels))
-            mask = mask + n_objs
-            labels = torch.arange(1, n_objs+2, device=labels.device, dtype=labels.dtype, out=labels)
-        prob = xmem.step(rgb, mask, labels)
+            in_masks = torch.zeros((20, *mask.shape[1:]), dtype=torch.uint8, device=mask.device)
+            in_masks[n_objs] = mask
+            labels = None
+            labels = torch.arange(1, n_objs+2, device=rgb.device, dtype=torch.long)
+            # xmem.set_all_labels(set(labels))
+        prob = xmem.step(rgb, in_masks, labels)
         out_mask = torch.max(prob, dim=0).indices
-        return out_mask
+        out_labels = torch.arange(1, prob.shape[0], device=rgb.device, dtype=torch.long)
+        out_masks = out_mask[None] == out_labels[:, None, None]
+        return out_masks
 
 
 def get_features(frame, loftr):

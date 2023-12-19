@@ -1,15 +1,17 @@
 import torch
-from bundle_fetch.frame.bf_dataset import BfDataset
+from bundle_fetch.frame.frame_dataset import FrameDataset
 from torchvision.transforms.functional import rgb_to_grayscale
 import open3d as o3d
 import numpy as np
+from bundle_fetch.frame.frame_realsense import FrameRealsense
+from bundle_fetch.frame.frame_spot import FrameSpot
 
 
 class Frame(object):
     def __init__(self, frame_stop, track_queue) -> None:
         self.frame_stop = frame_stop
         self.track_queue = track_queue
-        self.dataset = BfDataset('/media/rpm/Data/imitation_learning/BundleFetch/data/test_multiobj')
+        self.source = None
         W = 640
         H = 480
         self.uv1 = torch.stack(torch.meshgrid(torch.arange(0, W), torch.arange(0, H))).float()
@@ -19,28 +21,20 @@ class Frame(object):
         """
         Get frames
         """
-        cuda_stream = torch.cuda.Stream()
+        if self.source is None:
+            # self.source = BfDataset('/media/rpm/Data/imitation_learning/BundleFetch/data/test_multiobj')
+            # self.source = FrameRealsense()
+            self.source = FrameSpot()
         i_frame = 0
-        
         while not self.frame_stop.is_set():
-            frame = get_frame(i_frame, self.dataset)
+            frame = self.source.get_frame()
             if frame is None:
                 break
             frame = process_frame(frame, self.uv1)
 
-            with torch.cuda.stream(cuda_stream):
-                # frame = {k: v.cuda() if isinstance(v, torch.Tensor) else v for k, v in frame.items()}
-                event = torch.cuda.Event()
-                self.track_queue.put((frame, event))
+            self.track_queue.put(frame)
             
             i_frame += 1
-
-
-def get_frame(i_frame, dataset):
-    if i_frame >= len(dataset):
-        return None
-    frame = dataset[i_frame]
-    return frame
 
 
 def process_frame(frame, uv1):

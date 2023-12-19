@@ -1,5 +1,5 @@
 
-from bundle_fetch.frame.bf_dataset import BfDataset
+from bundle_fetch.frame.frame_dataset import BfDataset
 import torch
 
 

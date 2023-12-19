@@ -10,7 +10,7 @@ from torchvision import transforms
 from xmem.dataset.range_transform import im_normalization
 
 
-class BfDataset(Dataset):
+class FrameDataset(Dataset):
     def __init__(self, data_dir, schema=['rgb', 'masks', 'depth']) -> None:
         super().__init__()
 
@@ -22,6 +22,7 @@ class BfDataset(Dataset):
             # im_normalization,
         ])
         self.cam_K = np.loadtxt(os.path.join(data_dir, 'cam_K.txt'))
+        self.i_frame = 0
 
     def __len__(self) -> int:
         return len(self.rgb_paths)
@@ -59,4 +60,11 @@ class BfDataset(Dataset):
             data[key] = image
         
         return data
+
+    def get_frame(self):
+        if self.i_frame >= len(self):
+            return None
+        frame = self[self.i_frame]
+        self.i_frame += 1
+        return frame
         

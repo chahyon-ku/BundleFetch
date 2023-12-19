@@ -22,9 +22,9 @@ class Track(object):
         self.gui_queue = gui_queue
 
         self.new_vertex = None
-        self.vertices = {}
-        self.edges = {}
+        self.graphs = []
         self.n_subvertices = 10
+        self.i_frame = 0
 
         self.loftr = load_loftr()
         self.xmem = load_xmem()
@@ -33,31 +33,52 @@ class Track(object):
         """
         Track objects
         """
-        cuda_stream = torch.cuda.Stream()
-        with torch.cuda.stream(cuda_stream):
-            with torch.inference_mode():
-                while not self.track_stop.is_set():
-                    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
-                    frame, event = self.track_queue.get()
-                    event.synchronize()
+        # cuda_stream = torch.cuda.Stream()
+        # with torch.cuda.stream(cuda_stream):
+        # with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+        with torch.inference_mode():
+            while not self.track_stop.is_set():
+                # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
+                frame = self.track_queue.get()
+                if frame is None:
+                    break
+                # event.wait()
+                # frame = {k: v.clone() for k, v in frame.items()}
 
-                    self.new_vertex = make_vertex(frame, self.new_vertex, len(self.vertices), self.xmem, self.loftr)
-                    # if len(self.vertices) == 0:
-                    #     self.vertices[0] = self.new_vertex
-                    # else:
-                    #     subvertices = get_subvertices(self.new_vertex, self.vertices, self.n_subvertices)
-                    #     subedges = get_subedges(subvertices, self.edges, self.loftr)
-                    #     # optimize_graph(subvertices, subedges)
-                        
-                    #     if check_add_vertex(self.new_vertex, self.vertices):
-                    #         self.vertices[self.new_vertex['id']] = self.new_vertex
-                    #         for k_subedge, v_subedge in subedges.items():
-                    #             if k_subedge not in self.edges:
-                    #                 self.edges[k_subedge] = v_subedge
-                        # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-                    self.vertices[self.new_vertex['id']] = self.new_vertex
-                    self.gui_queue.put(self.new_vertex)
-                    # print(self.new_vertex['o_T_c'])
+                new_vertices = make_vertex(frame, self.graphs, self.i_frame, self.xmem, self.loftr)
+                if len(new_vertices) > len(self.graphs):
+                    self.graphs.append([{}, {}, new_vertices[-1]])
+                    print('new object', len(self.graphs) - 1)
+                for i_obj, vertex in enumerate(new_vertices):
+                    if vertex['mask'].sum() > 0:
+                        self.graphs[i_obj][0][vertex['id']] = vertex
+
+                np_frame = {
+                    'rgb': frame['rgb'].cpu().numpy(),
+                    'cam_K': frame['cam_K'].cpu().numpy(),
+                }
+                np_vertices = [{
+                    'id': vertex['id'].cpu().numpy(),
+                    'mask': vertex['mask'].cpu().numpy(),
+                    'c_T_o': vertex['o_T_c'].inv().matrix().cpu().numpy(),
+                } for vertex in new_vertices]
+                self.gui_queue.put([np_frame, np_vertices])
+                self.i_frame += 1
+
+                # if len(self.vertices) == 0:
+                #     self.vertices[0] = self.new_vertex
+                # else:
+                #     subvertices = get_subvertices(self.new_vertex, self.vertices, self.n_subvertices)
+                #     subedges = get_subedges(subvertices, self.edges, self.loftr)
+                #     # optimize_graph(subvertices, subedges)
+                    
+                #     if check_add_vertex(self.new_vertex, self.vertices):
+                #         self.vertices[self.new_vertex['id']] = self.new_vertex
+                #         for k_subedge, v_subedge in subedges.items():
+                #             if k_subedge not in self.edges:
+                #                 self.edges[k_subedge] = v_subedge
+                    # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+                # print(self.new_vertex['o_T_c'])
 
 
 def load_loftr():
@@ -79,33 +100,43 @@ def load_xmem():
     xmem_weights = torch.load(cfg.xmem.checkpoint)
     xmem.load_weights(xmem_weights, init_as_zero_if_needed=True)
     xmem = InferenceCore(xmem, config=cfg.xmem)
-    xmem.set_all_labels(set([1]))
+    xmem.set_all_labels(set(list(range(1, 21))))
     return xmem
 
 
-def make_vertex(frame, prev_vertex, id, xmem, loftr):
+def make_vertex(frame, graphs, id, xmem, loftr):
     """
     Make vertex from frame
     """
     with nvtx_range('make_vertex'):
-        mask = get_mask(frame, xmem)
+        masks = get_mask(frame, xmem, len(graphs))
+        if masks is None:
+            return []
         # feat_c, feat_f, hw_i, hw_c, hw_f = get_features(frame, loftr)
-        vertex = {
-            'id': id,
-            'frame': frame,
-            'mask': mask,
-            # 'feat_c': feat_c,
-            # 'feat_f': feat_f,
-            # 'hw_i': hw_i,
-            # 'hw_c': hw_c,
-            # 'hw_f': hw_f,
-        }
-        # if id == 0:
-        max_masked_xyz = (frame['xyz'].cuda() * mask.cuda())
-        o_T_c = torch.sum(max_masked_xyz, dim=(1, 2)) / torch.sum(mask.cuda()) # (3)
-        o_T_c = torch.concat([o_T_c, torch.zeros_like(o_T_c)], dim=-1)
-        vertex['o_T_c'] = lietorch.SE3.exp(o_T_c) # (6)
-        return vertex
+        new_vertices = []
+        for i_obj in range(masks.shape[0]):
+            mask = masks[i_obj]
+            if i_obj >= len(graphs) and mask.sum() == 0:
+                break
+            vertex = {
+                'id': torch.tensor(id, device=mask.device, dtype=torch.int),
+                'frame': frame,
+                'mask': masks[i_obj],
+                # 'feat_c': feat_c,
+                # 'feat_f': feat_f,
+                # 'hw_i': hw_i,
+                # 'hw_c': hw_c,
+                # 'hw_f': hw_f,
+            }
+            # if id == 0:
+            max_masked_xyz = frame['xyz'].cuda() * mask
+            o_T_c = torch.sum(max_masked_xyz, dim=(1, 2)) / torch.sum(mask) # (3)
+            o_T_c = torch.concat([o_T_c, torch.zeros(4, device=o_T_c.device, dtype=o_T_c.dtype)], dim=-1)
+            o_T_c[-1] = 1
+            # o_T_c = torch.zeros(7, device=o_T_c.device, dtype=o_T_c.dtype)
+            vertex['o_T_c'] = lietorch.SE3.InitFromVec(o_T_c) # (7)
+            new_vertices.append(vertex)
+        return new_vertices
 
         prev_vertex['id'] = -1
         subvertices = {prev_vertex['id']: prev_vertex, vertex['id']: vertex}
