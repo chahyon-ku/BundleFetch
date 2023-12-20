@@ -14,4 +14,8 @@ pip install --no-deps git+https://github.com/chahyon-ku/XMem.git
 pip install --no-deps git+https://github.com/facebookresearch/segment-anything.git
 pip install --no-deps git+https://github.com/princeton-vl/lietorch.git
 pip install --no-deps -e .
+
+mkdir checkpoints
+cd checkpoints
+wget https://github.com/hkchengrex/XMem/releases/download/v1.0/XMem.pth 
 ```
