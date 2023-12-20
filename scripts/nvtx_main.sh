@@ -1,1 +1,0 @@
-nsys profile --trace=cuda,cudnn,cublas,nvtx python scripts/main.py
