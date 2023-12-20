@@ -3,6 +3,7 @@ mamba create -n bundle_fetch
 mamba activate bundle_fetch
 mamba install python=3.8
 mamba install pytorch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 pytorch-cuda=11.7 -c pytorch -c nvidia
+mamba install -c nvidia cuda=11.7
 mamba install -c fvcore -c iopath -c conda-forge fvcore iopath
 mamba install pytorch-scatter -c pyg
 mamba install pytorch3d -c pytorch3d

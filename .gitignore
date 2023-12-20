@@ -7,3 +7,4 @@ DAVIS
 .vscode
 bundle_fetch/lib
 *.qd*
+tmp

@@ -24,7 +24,8 @@ class FrameSpot(object):
     def __init__(self):
         # Create robot
         self.sdk = bosdyn.client.create_standard_sdk('bundle_fetch')
-        self.robot = self.sdk.create_robot('192.168.80.3')
+        # self.robot = self.sdk.create_robot('192.168.80.3')
+        self.robot = self.sdk.create_robot('10.0.0.3')
         bosdyn.client.util.authenticate(self.robot)
         self.robot.sync_with_directory()
         self.robot.time_sync.wait_for_sync()
@@ -46,7 +47,7 @@ class FrameSpot(object):
         self.n_obj = 0
 
     
-    def get_frame(self):
+    def get_frame(self, spot_queue):
         images = self.image_client.get_image(self.image_requests)
         np_images = [image_to_opencv(image)[0] for image in images]
         
@@ -58,7 +59,7 @@ class FrameSpot(object):
             [0, 0, 1]]
         ).astype(np.float32))
 
-        mask = ((0 < depth) & (depth < 0.6)).float()
+        mask = ((0.5 < depth) & (depth < 0.6)).float()
         n_masked_pixels = mask.sum()
 
         cv2.imshow('mask', mask[0].numpy())
@@ -67,14 +68,22 @@ class FrameSpot(object):
         frame = {'rgb': rgb, 'depth': depth, 'cam_K': cam_K}
         if self.next_obj_timer > 0:
             self.next_obj_timer -= 1
+            try:
+                spot_queue.put(0, timeout=0.1)
+            except:
+                pass
             # print('next obj counter', self.next_obj_timer)
         elif n_masked_pixels > 1000:
+            try:
+                spot_queue.put(0.01, timeout=0.1)
+            except:
+                pass
             if self.prev_mask is not None:
                 diff = (mask - self.prev_mask).abs().sum()
-                diff_thresh = n_masked_pixels / 25
+                diff_thresh = n_masked_pixels / 10
                 if diff < diff_thresh:
                     frame['mask'] = mask
-                    self.next_obj_timer = 30
+                    self.next_obj_timer = 10
                     self.n_obj += 1
                     print('diff', diff, diff_thresh)
             self.prev_mask = mask

@@ -6,7 +6,8 @@ import cv2
 import numpy as np
 
 
-def gui_thread_target(gui_stop, gui_queue: Queue):
+def gui_process_target(gui_stop, gui_queue: Queue):
+    print('[GUI] gui process started')
     dpg.create_context()
     dpg.create_viewport(width=1280, height=1280)
     dpg.setup_dearpygui()

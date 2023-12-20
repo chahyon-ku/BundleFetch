@@ -4,7 +4,7 @@ hydra:
     dir: ./
 
 xmem:
-  checkpoint: /media/rpm/Data/imitation_learning/BundleFetch/checkpoints/XMem.pth
+  checkpoint: checkpoints/XMem.pth
   single_object: False
   mem_every: 5
   deep_update_every: -1
